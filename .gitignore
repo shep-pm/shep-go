@@ -1,0 +1,5 @@
+# Go build and coverage output. Nothing in this repo is generated into the
+# tree except wire.go, which is committed.
+*.exe
+*.test
+*.out

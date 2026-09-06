@@ -1,0 +1,6 @@
+# Exceptions for `crate-ci/typos` (CI job `typos`).
+# Every entry here was read in context, not defaulted.
+
+[default.extend-words]
+# The wire's own spelling, in every fixture and every kind constant.
+kinds = "kinds"
