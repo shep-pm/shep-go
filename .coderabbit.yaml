@@ -49,9 +49,8 @@ reviews:
 
     - path: "README.md"
       instructions: >-
-        Published prose. Terminology is fixed by shep's own
-        docs/terminology.md: the plural of `sheep` is `flock`, and the
-        daemon is only ever "the shepherd".
+        Published prose. Terminology is fixed: the plural of `sheep` is
+        `flock`, and the daemon is only ever "the shepherd".
 
   tools:
     # `typos` is a required check once this repository's CI exists, with its
