@@ -19,15 +19,19 @@ reviews:
   profile: assertive
 
   auto_review:
-    # release-plz opens this once the module has its own release automation.
-    # Merging one is the release. Every commit in it was already reviewed
-    # on its own pull request. The diff itself needs no separate review.
+    # release-please opens this one. Merging it is the release. Every
+    # commit in it was already reviewed on its own pull request, so the
+    # diff itself needs no separate review.
     #
     # Matched on a label, not a username or a title keyword. A bot can
     # post under the maintainer's own token, so username cannot tell them
     # apart. A force-pushed branch does not always re-run a title match.
+    #
+    # The label is release-please's own default while the pull request is
+    # open. It becomes `autorelease: tagged` after the merge, which is
+    # past anything this skip could affect.
     labels:
-      - "!release"
+      - "!autorelease: pending"
 
   path_instructions:
     - path: "channel/**/*.go"
