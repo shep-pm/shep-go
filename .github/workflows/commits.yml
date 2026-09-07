@@ -1,0 +1,83 @@
+name: commits
+# Rejects a pull request whose commit subjects miss this gate's nine
+# accepted types. That is a house rule, stricter than release-please
+# requires.
+#
+# release-please also parses revert and build, which this gate
+# refuses anyway. An unparsed subject gets no changelog entry and no
+# version bump, even if it breaks something.
+#
+# Every type this gate accepts bumps at least a patch version. A
+# docs or chore commit merged to main opens a release pull request.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  conventional:
+    name: conventional subjects
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history: a subject is only checkable if it is fetched.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Check every commit subject on this branch
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          # --no-merges: release-please skips merges. A `!` on a merge
+          # subject or PR title never reaches it.
+          #
+          # No exemptions here: an unsquashed fixup!/squash!/amend! commit
+          # or a `git revert` subject parses as nothing, like other
+          # unreadable subjects.
+          #
+          # The nine types below are this gate's house rule, not
+          # release-please's own list (see header).
+          #
+          # A `!` after the type marks a breaking change even on
+          # docs/chore, per the spec. This gate refuses revert/build
+          # regardless of `!`, since neither is one of the nine
+          # accepted types.
+          #
+          # Scope allows any character except parentheses, per the spec,
+          # so `feat(API): ...` is valid.
+          bad=0
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+            if printf '%s' "$subject" | grep -qE '^(feat|fix|perf|refactor|docs|test|ci|chore|style)(\([^()]+\))?!?: .+'; then
+              printf '  ok      %s\n' "$subject"
+            else
+              printf '  DROPPED %s\n' "$subject"
+              bad=$((bad + 1))
+            fi
+          done <<EOF
+          $(git log --no-merges --format='%s' "$BASE..$HEAD")
+          EOF
+
+          if [ "$bad" -gt 0 ]; then
+            cat >&2 <<MSG
+
+          $bad commit subject(s) above fail this gate's accepted types.
+
+          Each one is unparseable by release-please, or a type this
+          house rule excludes. Revert and build are examples of the
+          second kind. An unparseable one gets no changelog entry and
+          no version bump, even if it breaks something.
+
+          Rewrite them as: type(optional-scope): lowercase summary
+
+          Put a ! after the type or scope on the commit that actually
+          breaks something. A ! on this pull request's title does nothing,
+          because release-please never reads the merge commit.
+          MSG
+            exit 1
+          fi
+          echo "All $(git log --no-merges --oneline "$BASE..$HEAD" | wc -l | tr -d ' ') commit subject(s) are readable."
