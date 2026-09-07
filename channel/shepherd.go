@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -183,10 +184,17 @@ func (s *Shepherd) Ready() error {
 
 // Metric records one sample. Never blocks and never fails.
 //
-// A sample may be dropped if the shepherd stops reading, which is what
-// DroppedMetrics counts. That trade keeps a hot path off a full socket.
+// A sample is dropped when the shepherd stops reading, and when the
+// value is not finite. DroppedMetrics counts both. That trade keeps a
+// hot path off a full socket.
 func (s *Shepherd) Metric(name string, value float64) {
 	if s.out == nil {
+		return
+	}
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		// JSON has no NaN and no infinity. Queueing one would cost
+		// the whole channel a line nothing can encode.
+		s.out.countDrop()
 		return
 	}
 	s.out.pushLossy(NewMetric(name, value))
@@ -221,8 +229,11 @@ func (s *Shepherd) Active() bool {
 	return s.out != nil && !s.out.isClosed()
 }
 
-// DroppedMetrics is how many samples were dropped because the shepherd
-// was not keeping up. Always 0 without a channel.
+// DroppedMetrics is how many samples were dropped instead of sent.
+// Always 0 without a channel.
+//
+// Two things drop a sample: a shepherd that stopped reading, and a
+// value JSON cannot carry.
 func (s *Shepherd) DroppedMetrics() uint64 {
 	if s.out == nil {
 		return 0

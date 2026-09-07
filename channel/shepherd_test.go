@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -456,5 +457,32 @@ func TestAShutdownHandlerThatEndsItsGoroutineWarnsAndTheReaderGoesOn(t *testing.
 	said := warnings.said()
 	if len(said) != 1 || !strings.Contains(said[0], "shutdown handler ended its goroutine") {
 		t.Fatalf("a shutdown handler that left produced %v", said)
+	}
+}
+
+// D4: a metric never blocks and never fails, so a value JSON cannot
+// carry costs one sample and nothing else. Readiness and replies are
+// the two things a channel exists for.
+func TestANonFiniteMetricIsDroppedAndTheChannelStaysUp(t *testing.T) {
+	warnings := &collector{}
+	shepherd := testShepherd(warnings.warn)
+	t.Cleanup(shepherd.out.close)
+	go shepherd.out.drain(io.Discard)
+
+	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		shepherd.Metric("p99", value)
+	}
+
+	if got := shepherd.DroppedMetrics(); got != 3 {
+		t.Fatalf("DroppedMetrics is %d, want 3", got)
+	}
+	if !shepherd.Active() {
+		t.Fatal("a sample JSON cannot carry closed the channel")
+	}
+	if err := shepherd.Ready(); err != nil {
+		t.Fatalf("Ready after three dropped samples: %v", err)
+	}
+	if said := warnings.said(); len(said) != 0 {
+		t.Fatalf("a dropped sample warned: %v", said)
 	}
 }

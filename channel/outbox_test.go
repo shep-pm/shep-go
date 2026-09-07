@@ -2,6 +2,7 @@ package channel
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -273,5 +274,29 @@ func TestDrainClosesTheOutboxWhenAWriteFails(t *testing.T) {
 	err := pushBounded(t, out, NewReady(), "a push after a dead transport")
 	if !errors.Is(err, ErrClosed) {
 		t.Fatalf("pushBlocking returned %v after a dead transport, want ErrClosed", err)
+	}
+}
+
+// A metric JSON cannot carry is one lost sample, not a dead transport.
+// encoding/json refuses NaN, and the outbox must not read that as a
+// dead socket. Everything queued behind it still has to be written.
+func TestDrainCountsAMetricItCannotEncodeAndWritesTheRest(t *testing.T) {
+	out := newOutbox(4)
+	if err := pushBounded(t, out, NewMetric("p99", math.NaN()), "queueing a metric JSON cannot carry"); err != nil {
+		t.Fatalf("queue the metric: %v", err)
+	}
+	if err := pushBounded(t, out, NewReady(), "queueing readiness"); err != nil {
+		t.Fatalf("queue readiness: %v", err)
+	}
+	out.close()
+
+	var written strings.Builder
+	runBounded(t, "drain over a metric that will not encode", func() { out.drain(&written) })
+
+	if got := out.droppedCount(); got != 1 {
+		t.Fatalf("dropped %d, want 1", got)
+	}
+	if written.String() != "{\"kind\":\"ready\"}\n" {
+		t.Fatalf("drain wrote %q, want readiness alone", written.String())
 	}
 }

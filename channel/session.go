@@ -67,12 +67,20 @@ func encodeLine(message any) ([]byte, error) {
 	return bytes.TrimRight(buffer.Bytes(), "\n"), nil
 }
 
+// writeLine writes one encoded message and its newline.
+func writeLine(writer io.Writer, line []byte) error {
+	_, err := writer.Write(append(line, '\n'))
+	return err
+}
+
 // writeMessage writes one message and its newline.
+//
+// Only a non-finite float can fail to encode. ChildMessage carries
+// strings, one float64 and one uint64, and JSON has no NaN.
 func writeMessage(writer io.Writer, message ChildMessage) error {
 	line, err := encodeLine(message)
 	if err != nil {
 		return err
 	}
-	_, err = writer.Write(append(line, '\n'))
-	return err
+	return writeLine(writer, line)
 }

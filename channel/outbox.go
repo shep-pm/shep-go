@@ -36,15 +36,18 @@ func newOutbox(capacity int) *outbox {
 // pushLossy queues a message that may be dropped. Never blocks.
 func (o *outbox) pushLossy(message ChildMessage) {
 	if o.isClosed() {
-		o.dropped.Add(1)
+		o.countDrop()
 		return
 	}
 	select {
 	case o.messages <- message:
 	default:
-		o.dropped.Add(1)
+		o.countDrop()
 	}
 }
+
+// countDrop records one message discarded instead of sent.
+func (o *outbox) countDrop() { o.dropped.Add(1) }
 
 // pushBlocking queues a message that must not be lost, waiting for room.
 //
@@ -110,13 +113,19 @@ func (o *outbox) drain(writer io.Writer) {
 	}
 }
 
-// writeOrClose writes one message, reporting whether it reached the
-// transport.
+// writeOrClose writes one message, reporting whether the transport is
+// still usable.
 //
-// A failure closes the outbox before drain abandons the queue. A push
-// racing that is told ErrClosed rather than nil.
+// The two failures differ. A message that will not encode costs one
+// drop and nothing else. A write failure is the transport itself. The
+// outbox closes, and a push racing that is told ErrClosed.
 func (o *outbox) writeOrClose(writer io.Writer, message ChildMessage) bool {
-	if err := writeMessage(writer, message); err != nil {
+	line, err := encodeLine(message)
+	if err != nil {
+		o.countDrop()
+		return true
+	}
+	if err := writeLine(writer, line); err != nil {
 		o.close()
 		return false
 	}
