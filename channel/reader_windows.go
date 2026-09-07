@@ -33,6 +33,10 @@ var (
 // in-progress WriteFile.
 type pipeReader struct {
 	pipe *os.File
+	// handle is taken once, at construction. os.File.Fd detaches the
+	// file from the runtime poller for this process. The writer loses
+	// SetWriteDeadline with it.
+	handle uintptr
 }
 
 // buffered reports how many bytes are waiting. open is false once the
@@ -43,7 +47,7 @@ func (r *pipeReader) buffered() (waiting uint32, open bool, err error) {
 	// uintptr in this argument list stays alive and unmoved. That is
 	// what makes &available sound here.
 	reported, _, callErr := procPeekNamedPipe.Call(
-		r.pipe.Fd(),
+		r.handle,
 		0,
 		0,
 		0,
@@ -93,7 +97,11 @@ func openPipe(path string) (*connection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s=%s could not be opened: %v", ErrUnusable, PipeVar, path, err)
 	}
-	return &connection{reader: &pipeReader{pipe: pipe}, writer: pipe, handle: pipe}, nil
+	return &connection{
+		reader: &pipeReader{pipe: pipe, handle: pipe.Fd()},
+		writer: pipe,
+		handle: pipe,
+	}, nil
 }
 
 // openDescriptor refuses an inherited descriptor on a platform that does
