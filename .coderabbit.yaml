@@ -1,11 +1,9 @@
 # yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
 #
-# CodeRabbit review settings. Everything here is a deviation from a default,
-# so a key that is absent is deliberate: it means the default is right.
+# CodeRabbit review settings. A key that is absent here keeps the default.
 #
-# Carried over from shep's own .coderabbit.yaml and cut to what applies to a
-# standard-library-only Go module: no Rust paths, no cargo tooling, no
-# generated web docs.
+# This config covers a standard-library Go module. It skips Rust paths,
+# cargo tooling, and generated web docs.
 
 language: en-US
 
@@ -15,22 +13,19 @@ tone_instructions: >-
   CI already enforces as a required check.
 
 reviews:
-  # Assertive, not the `chill` default. shep-go carries the shepherd channel
-  # an app's readiness and metrics ride on, so a missed defect here costs an
-  # operator's app the same way a missed one in shep costs their flock.
+  # Assertive, not the `chill` default. shep-go carries the channel apps use
+  # for readiness and metrics. A missed defect here can break an operator's
+  # app.
   profile: assertive
 
   auto_review:
-    # release-plz would open these once this module has its own release
-    # automation, and merging one IS the release: nothing in the diff is
-    # unreviewed, since it is a version bump plus a changelog generated from
-    # commits already reviewed on their own pull requests.
+    # release-plz opens this once the module has its own release automation.
+    # Merging one is the release. Every commit in it was already reviewed
+    # on its own pull request. The diff itself needs no separate review.
     #
-    # Matched on a LABEL rather than a username or a title keyword. shep's
-    # own history found both of those unreliable: a bot posting under the
-    # maintainer's own token is indistinguishable from the maintainer by
-    # username, and a force-pushed branch does not always re-evaluate a
-    # title match.
+    # Matched on a label, not a username or a title keyword. A bot can
+    # post under the maintainer's own token, so username cannot tell them
+    # apart. A force-pushed branch does not always re-run a title match.
     labels:
       - "!release"
 
@@ -54,16 +49,15 @@ reviews:
 
   tools:
     # `typos` is a required check once this repository's CI exists, with its
-    # own configuration in _typos.toml. LanguageTool on top of it produces
-    # style opinions about deliberate prose, which tone_instructions above
-    # already asks it not to do.
+    # own configuration in _typos.toml. LanguageTool would add style opinions
+    # about deliberate prose. tone_instructions above already forbids that.
     languagetool:
       enabled: false
     markdownlint:
       enabled: false
 
-  # No issue has ever been opened on this repository, and the label set is
-  # GitHub's untouched default.
+  # This repository has no open issues, and its label set is GitHub's
+  # default.
   assess_linked_issues: false
   related_issues: false
   suggested_labels: false
