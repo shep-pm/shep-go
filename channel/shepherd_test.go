@@ -143,6 +143,38 @@ func TestTheNoChannelWarningFiresOnlyUnderShep(t *testing.T) {
 	}
 }
 
+// A descriptor that will not open is a broken environment, not an absent
+// channel. It is loud, it still hands back a handle, and the stamp goes
+// with it: this is the only inert handle that carries one.
+func TestADescriptorThatWillNotOpenWarnsAndKeepsTheStamp(t *testing.T) {
+	warnings := &collector{}
+	handle := start(fakeEnv(map[string]string{
+		FDVar:      "not-a-number",
+		VersionVar: "99",
+		nameVar:    "web",
+	}), warnings.warn)
+
+	if handle.Active() {
+		t.Fatal("a handle over a descriptor that will not open reads as live")
+	}
+	if handle.Version() != "99" {
+		t.Fatalf("Version is %q, want %q", handle.Version(), "99")
+	}
+	if err := handle.Ready(); err != nil {
+		t.Fatalf("Ready on an inert handle returned %v", err)
+	}
+
+	said := warnings.said()
+	if len(said) != 1 {
+		t.Fatalf("a broken descriptor produced %d warnings: %v", len(said), said)
+	}
+	for _, wanted := range []string{FDVar, "not-a-number", "continuing without a channel"} {
+		if !strings.Contains(said[0], wanted) {
+			t.Fatalf("the warning does not say %q: %s", wanted, said[0])
+		}
+	}
+}
+
 // D7: one descriptor has one owner. A second call hands back the first
 // handle and says why. The only test here that calls the singleton,
 // which is process-global and answers once.
