@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -113,6 +114,9 @@ func (s *Shepherd) readLoop(reader *bufio.Reader) {
 		message, err := readMessage(reader)
 		if err != nil {
 			if !errors.Is(err, ErrMalformed) {
+				if !errors.Is(err, io.EOF) {
+					s.stoppedEarly(err.Error())
+				}
 				return
 			}
 			if !warnedMalformed {
@@ -122,9 +126,21 @@ func (s *Shepherd) readLoop(reader *bufio.Reader) {
 			continue
 		}
 		if !s.answer(message) {
+			s.stoppedEarly("the shepherd is no longer taking replies")
 			return
 		}
 	}
+}
+
+// stoppedEarly warns that the reader ended before the shepherd closed
+// the channel.
+//
+// End of stream is the ordinary way to finish and says nothing. Without
+// this, the one case an operator has to act on looks like the quiet
+// one.
+func (s *Shepherd) stoppedEarly(reason string) {
+	s.warn("the channel reader stopped early: " + reason +
+		". This app now answers no actions.")
 }
 
 // answer handles one message and reports whether the loop continues.

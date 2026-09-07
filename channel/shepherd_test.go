@@ -2,6 +2,7 @@ package channel
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"runtime"
 	"strings"
@@ -258,12 +259,55 @@ type failWriter struct{}
 
 func (failWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
 
+// errTransport is a broken connection rather than a shepherd that closed
+// its end.
+var errTransport = errors.New("connection reset by peer")
+
+// errReader fails every read.
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errTransport }
+
+// An operator greps for one prefix. A reader that stopped answering has
+// to be findable that way, and end of stream has to stay quiet.
+func TestAReadFailureWarnsAndACleanEndOfStreamDoesNot(t *testing.T) {
+	broken := &collector{}
+	shepherd := testShepherd(broken.warn)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		shepherd.readLoop(bufio.NewReader(errReader{}))
+	}()
+	select {
+	case <-done:
+	case <-time.After(serveDeadline):
+		t.Fatal("readLoop never returned")
+	}
+
+	said := broken.said()
+	if len(said) != 1 {
+		t.Fatalf("a broken transport produced %d warnings: %v", len(said), said)
+	}
+	for _, wanted := range []string{"stopped early", "connection reset by peer", "no actions"} {
+		if !strings.Contains(said[0], wanted) {
+			t.Fatalf("the warning does not say %q: %s", wanted, said[0])
+		}
+	}
+
+	quiet := &collector{}
+	runReadLoop(t, testShepherd(quiet.warn), "")
+	if said := quiet.said(); len(said) != 0 {
+		t.Fatalf("a clean end of stream warned: %v", said)
+	}
+}
+
 // A shepherd that goes away mid-stream has to stop the reader. The
 // alternative is a loop running handlers whose replies nobody can write.
 // ErrClosed is final here, never retried: a retry could send one reply
 // twice.
 func TestAWriterFailureStopsTheReaderMidStream(t *testing.T) {
-	shepherd := testShepherd(func(string) {})
+	warnings := &collector{}
+	shepherd := testShepherd(warnings.warn)
 	ran := make(chan struct{}, 8)
 	shepherd.OnAction("gc", func(Action) string {
 		ran <- struct{}{}
@@ -283,6 +327,10 @@ func TestAWriterFailureStopsTheReaderMidStream(t *testing.T) {
 
 	if got := len(ran); got != 1 {
 		t.Fatalf("%d handlers ran after the writer failed, want 1", got)
+	}
+	said := warnings.said()
+	if len(said) != 1 || !strings.Contains(said[0], "no longer taking replies") {
+		t.Fatalf("a reader stopped by a failing writer said %v", said)
 	}
 }
 
