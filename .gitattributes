@@ -1,1 +1,7 @@
 * text=auto eol=lf
+
+# Two files that are compared byte for byte. The fixtures have to match
+# the Rust corpus exactly, and wire.go is frozen at the bytes its
+# generator wrote. Neither may be rewritten on checkout or on commit.
+channel/fixtures/*.json -text
+channel/wire.go -text
