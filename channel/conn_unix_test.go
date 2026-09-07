@@ -154,14 +154,20 @@ func TestRecvAndSendRefuseAfterClose(t *testing.T) {
 // An open that failed claimed nothing. Keeping the claim would refuse
 // every later call in this process over one bad value.
 func TestAFailedOpenReleasesTheClaim(t *testing.T) {
-	// openDescriptor closes the number it was handed, so this file needs
-	// no Close of its own.
 	file, err := os.CreateTemp(t.TempDir(), "not-a-socket")
 	if err != nil {
 		t.Fatalf("temp file: %v", err)
 	}
+	// openDescriptor closes the number it is handed, so it gets a
+	// duplicate. The file's own number would then be closed twice,
+	// once by its finalizer.
+	defer file.Close()
+	spare, err := syscall.Dup(int(file.Fd()))
+	if err != nil {
+		t.Fatalf("duplicate the descriptor: %v", err)
+	}
 
-	_, err = openConn(fakeEnv(map[string]string{FDVar: fmt.Sprint(file.Fd())}))
+	_, err = openConn(fakeEnv(map[string]string{FDVar: fmt.Sprint(spare)}))
 	if !errors.Is(err, ErrUnusable) {
 		t.Fatalf("a regular file opened as %v, want ErrUnusable", err)
 	}

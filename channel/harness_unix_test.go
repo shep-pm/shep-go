@@ -45,6 +45,9 @@ func startChild(t *testing.T) *child {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start the child: %v", err)
 	}
+	// Registered here, not below. A failure in between would otherwise
+	// leave the child running with nothing to stop it.
+	t.Cleanup(func() { cmd.Process.Kill() })
 	if err := theirEnd.Close(); err != nil {
 		t.Fatalf("close the child's end in the parent: %v", err)
 	}
@@ -59,9 +62,6 @@ func startChild(t *testing.T) *child {
 	if err := conn.SetDeadline(time.Now().Add(childDeadline)); err != nil {
 		t.Fatalf("set the deadline: %v", err)
 	}
-	t.Cleanup(func() {
-		conn.Close()
-		cmd.Process.Kill()
-	})
+	t.Cleanup(func() { conn.Close() })
 	return &child{reader: bufio.NewReader(conn), writer: conn, cmd: cmd}
 }
