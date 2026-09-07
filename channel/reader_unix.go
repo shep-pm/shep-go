@@ -28,6 +28,7 @@ func openDescriptor(fd int) (*connection, error) {
 			ErrUnusable, FDVar, fd, err)
 	}
 	if closeErr != nil {
+		conn.Close()
 		return nil, fmt.Errorf("%w: %s=%d could not be handed over: %v", ErrUnusable, FDVar, fd, closeErr)
 	}
 	return &connection{reader: conn, writer: conn, handle: conn}, nil
