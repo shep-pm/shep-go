@@ -76,7 +76,7 @@ type connection struct {
 
 // Discover reads the environment and says where the channel is.
 //
-// Branches on which variable is present, never on the platform: the
+// It branches on which variable is present, never on the platform. The
 // shepherd sets exactly one of them, and neither is the ordinary case.
 func Discover() (Endpoint, error) {
 	return discover(os.LookupEnv)

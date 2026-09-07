@@ -46,7 +46,7 @@ func TestAPipePathIsTakenFromTheEnvironment(t *testing.T) {
 	}
 }
 
-// Taking 1 would give this module the app's stdout: it would write JSON
+// Taking 1 would give this module the app's stdout. It would write JSON
 // into it and close it on exit. Worse than a merely wrong number.
 func TestADescriptorBelowThreeIsRefused(t *testing.T) {
 	for _, raw := range []string{"0", "1", "2", "-1"} {
