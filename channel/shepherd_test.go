@@ -335,8 +335,8 @@ func TestAWriterFailureStopsTheReaderMidStream(t *testing.T) {
 }
 
 // Handlers run on the reader goroutine, so one that blocks holds up the
-// next message. An author budgets against action_timeout for that. The
-// ordering has to be a fact rather than a hope.
+// next message. Nothing in this package bounds a handler. The ordering
+// has to be a fact rather than a hope.
 func TestABlockingHandlerHoldsUpTheNextMessage(t *testing.T) {
 	shepherd := testShepherd(func(string) {})
 	entered, release := make(chan struct{}), make(chan struct{})

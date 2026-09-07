@@ -106,7 +106,8 @@ func start(get lookup, warn func(string)) *Shepherd {
 // readLoop reads one message at a time and answers it.
 //
 // Handlers run on this goroutine, so a slow handler delays the next
-// message. The shepherd's action_timeout is the budget for that.
+// message. Nothing here bounds one, and action_timeout bounds only the
+// shepherd's wait for a reply.
 func (s *Shepherd) readLoop(reader *bufio.Reader) {
 	defer s.out.close()
 	warnedMalformed := false
@@ -214,8 +215,8 @@ func (s *Shepherd) OnShutdown(fn func()) *Shepherd {
 // Active reports whether this process's channel is live right now.
 //
 // False before an operator opens one, and false again once the shepherd
-// goes away. An app watching it notices, rather than reporting into
-// nothing.
+// goes away. It stays true while a shepherd that has stopped reading
+// wedges the writer.
 func (s *Shepherd) Active() bool {
 	return s.out != nil && !s.out.isClosed()
 }
