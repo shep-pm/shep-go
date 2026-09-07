@@ -300,3 +300,56 @@ func TestDrainCountsAMetricItCannotEncodeAndWritesTheRest(t *testing.T) {
 		t.Fatalf("drain wrote %q, want readiness alone", written.String())
 	}
 }
+
+// lineCounter counts writes instead of storing bytes. drain calls it
+// from one goroutine, so no locking is needed here.
+type lineCounter struct{ lines int }
+
+func (c *lineCounter) Write(p []byte) (int, error) {
+	c.lines++
+	return len(p), nil
+}
+
+// A metric handed to pushLossy right as close runs must land somewhere
+// countable: written by drain, or counted in droppedCount. Never both,
+// never neither.
+func TestALossyPushNeverStrandsAMetricAcrossCloseAndDrain(t *testing.T) {
+	const trials = 200
+	const senders = 64
+
+	for range trials {
+		out := newOutbox(senders / 2)
+		gate := make(chan struct{})
+		var pushing sync.WaitGroup
+		for sender := range senders {
+			pushing.Add(1)
+			go func() {
+				defer pushing.Done()
+				<-gate
+				out.pushLossy(NewMetric("push", float64(sender)))
+			}()
+		}
+
+		var counter lineCounter
+		drainDone := make(chan struct{})
+		go func() {
+			defer close(drainDone)
+			out.drain(&counter)
+		}()
+
+		close(gate)
+		out.close()
+
+		pushDone := make(chan struct{})
+		go func() {
+			pushing.Wait()
+			close(pushDone)
+		}()
+		waitFor(t, pushDone, "the senders")
+		waitFor(t, drainDone, "drain")
+
+		if got := counter.lines + int(out.droppedCount()); got != senders {
+			t.Fatalf("written %d + dropped %d = %d, want %d", counter.lines, out.droppedCount(), got, senders)
+		}
+	}
+}

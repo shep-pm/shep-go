@@ -20,6 +20,7 @@ const outboxCapacity = 1024
 // wait_ready, and a dropped reply costs an operator a whole
 // action_timeout.
 type outbox struct {
+	closeMu   sync.Mutex
 	messages  chan ChildMessage
 	closed    chan struct{}
 	closeOnce sync.Once
@@ -34,7 +35,12 @@ func newOutbox(capacity int) *outbox {
 }
 
 // pushLossy queues a message that may be dropped. Never blocks.
+//
+// The closed check and the enqueue share close's mutex, so a message
+// is always either written or counted, never both and never neither.
 func (o *outbox) pushLossy(message ChildMessage) {
+	o.closeMu.Lock()
+	defer o.closeMu.Unlock()
 	if o.isClosed() {
 		o.countDrop()
 		return
@@ -74,6 +80,8 @@ func (o *outbox) pushBlocking(message ChildMessage) error {
 // The message channel itself is never closed. A send racing a close on
 // it would panic, and a metric during shutdown is ordinary.
 func (o *outbox) close() {
+	o.closeMu.Lock()
+	defer o.closeMu.Unlock()
 	o.closeOnce.Do(func() { close(o.closed) })
 }
 
