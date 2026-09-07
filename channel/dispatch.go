@@ -51,8 +51,8 @@ func (d *dispatch) resolveShutdown() (func(), bool) {
 // replyBody runs handler and returns what to send back.
 //
 // An unregistered name and a panicking handler both produce a body.
-// Silence from either looks like an app thinking hard about a slow
-// action.
+// recover catches a panic but not runtime.Goexit. A handler that
+// calls Goexit ends its goroutine silently, and no reply is sent.
 func replyBody(handler func(Action) string, registered bool, action Action) (body string) {
 	if !registered {
 		return "unknown action: " + action.Name
