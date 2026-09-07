@@ -51,8 +51,7 @@ func testShepherd(warn func(string)) *Shepherd {
 	return &Shepherd{out: newOutbox(outboxCapacity), handlers: newDispatch(), warn: warn}
 }
 
-// D3: an app must be able to call every method without asking whether it
-// has a channel.
+// D3: an app calls every method without asking whether it has a channel.
 func TestAnInertHandleAcceptsEverythingAndDoesNothing(t *testing.T) {
 	shepherd := inert("", func(string) {})
 	if shepherd.Active() {

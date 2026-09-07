@@ -38,8 +38,8 @@ var (
 
 // Serve opens this process's channel and starts serving it.
 //
-// Always returns a usable handle. A second call returns the first one:
-// the channel is one descriptor and cannot be owned twice.
+// Always returns a usable handle. A second call returns the first one.
+// The channel is one descriptor and cannot be owned twice.
 func Serve() *Shepherd {
 	return serveShared(os.LookupEnv, stderrWarn)
 }
@@ -178,7 +178,7 @@ func (s *Shepherd) Metric(name string, value float64) {
 // OnAction registers a handler for one action name, replacing any prior
 // one. The returned string becomes the reply body.
 //
-// Safe to call from another goroutine, or from inside a handler: a
+// Safe to call from another goroutine, or from inside a handler. A
 // reload action can swap its own handlers this way.
 func (s *Shepherd) OnAction(name string, fn func(a Action) string) *Shepherd {
 	s.handlers.registerAction(name, fn)
@@ -198,7 +198,8 @@ func (s *Shepherd) OnShutdown(fn func()) *Shepherd {
 // Active reports whether this process's channel is live right now.
 //
 // False before an operator opens one, and false again once the shepherd
-// goes away. DroppedMetrics never freezes silently.
+// goes away. An app watching it notices, rather than reporting into
+// nothing.
 func (s *Shepherd) Active() bool {
 	return s.out != nil && !s.out.isClosed()
 }
