@@ -90,7 +90,10 @@ func (o *outbox) isClosed() bool {
 func (o *outbox) droppedCount() uint64 { return o.dropped.Load() }
 
 // drain writes queued messages until the transport fails or the outbox
-// closes. It then writes whatever is still queued and returns.
+// closes.
+//
+// A close is not a discard: whatever is still queued is written first.
+// A failed transport drops the rest, since nothing can reach it.
 func (o *outbox) drain(writer io.Writer) {
 	for {
 		select {
