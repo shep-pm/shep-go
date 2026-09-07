@@ -49,17 +49,21 @@ func (o *outbox) pushLossy(message ChildMessage) {
 // pushBlocking queues a message that must not be lost, waiting for room.
 //
 // Returns ErrClosed once the writer has stopped, rather than parking on
-// a queue nothing drains.
+// a queue nothing drains. A send and a close can both be ready. A
+// winning send is rechecked, so nil never covers a stranded message.
 func (o *outbox) pushBlocking(message ChildMessage) error {
 	if o.isClosed() {
 		return ErrClosed
 	}
 	select {
 	case o.messages <- message:
-		return nil
 	case <-o.closed:
 		return ErrClosed
 	}
+	if o.isClosed() {
+		return ErrClosed
+	}
+	return nil
 }
 
 // close releases every waiter. Safe to call more than once.
@@ -85,18 +89,17 @@ func (o *outbox) droppedCount() uint64 { return o.dropped.Load() }
 // drain writes queued messages until the transport fails or the outbox
 // closes. It then writes whatever is still queued and returns.
 func (o *outbox) drain(writer io.Writer) {
-	defer o.close()
 	for {
 		select {
 		case message := <-o.messages:
-			if err := writeMessage(writer, message); err != nil {
+			if !o.writeOrClose(writer, message) {
 				return
 			}
 		case <-o.closed:
 			for {
 				select {
 				case message := <-o.messages:
-					if err := writeMessage(writer, message); err != nil {
+					if !o.writeOrClose(writer, message) {
 						return
 					}
 				default:
@@ -105,4 +108,17 @@ func (o *outbox) drain(writer io.Writer) {
 			}
 		}
 	}
+}
+
+// writeOrClose writes one message, reporting whether it reached the
+// transport.
+//
+// A failure closes the outbox before drain abandons the queue. A push
+// racing that is told ErrClosed rather than nil.
+func (o *outbox) writeOrClose(writer io.Writer, message ChildMessage) bool {
+	if err := writeMessage(writer, message); err != nil {
+		o.close()
+		return false
+	}
+	return true
 }

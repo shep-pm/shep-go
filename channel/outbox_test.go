@@ -3,6 +3,7 @@ package channel
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -47,6 +48,32 @@ func pushBounded(t *testing.T, out *outbox, message ChildMessage, what string) e
 	var err error
 	runBounded(t, what, func() { err = out.pushBlocking(message) })
 	return err
+}
+
+// sentinelName marks the message that divides one queue into what was
+// pushed before a close and what was pushed after it.
+const sentinelName = "sentinel"
+
+// queuedAfterTheSentinel reports which senders landed behind the mark.
+//
+// Every sender has finished by the time this runs, so draining the
+// queue to empty reads all of it.
+func queuedAfterTheSentinel(t *testing.T, out *outbox) []int {
+	t.Helper()
+	var late []int
+	past := false
+	for {
+		select {
+		case message := <-out.messages:
+			if *message.Name == sentinelName {
+				past = true
+			} else if past {
+				late = append(late, int(*message.Value))
+			}
+		default:
+			return late
+		}
+	}
 }
 
 // receiveBounded takes one queued message and fails at the deadline.
@@ -159,6 +186,51 @@ func TestAMustDeliverPushOnAClosedOutboxRefuses(t *testing.T) {
 	err := pushBounded(t, out, NewReady(), "a push on a closed outbox")
 	if !errors.Is(err, ErrClosed) {
 		t.Fatalf("pushBlocking returned %v, want ErrClosed", err)
+	}
+}
+
+// D4: nothing that must not be lost is reported as sent once the outbox
+// has closed.
+//
+// close can land between a push's check and its send. The send then
+// wins a race, and must not be reported as nil.
+func TestABlockingPushNeverReportsSuccessOnceTheOutboxIsClosed(t *testing.T) {
+	const trials = 50
+	const senders = 512
+
+	for range trials {
+		out := newOutbox(outboxCapacity)
+		gate := make(chan struct{})
+		results := make([]error, senders)
+		var pushing sync.WaitGroup
+		for sender := range senders {
+			pushing.Add(1)
+			go func() {
+				defer pushing.Done()
+				<-gate
+				results[sender] = out.pushBlocking(NewMetric("push", float64(sender)))
+			}()
+		}
+
+		// close lands mid-flight, and the sentinel marks the queue at
+		// that instant. The queue is first in, first out, so anything
+		// behind the sentinel was queued later.
+		close(gate)
+		out.close()
+		out.messages <- NewMetric(sentinelName, 0)
+
+		finished := make(chan struct{})
+		go func() {
+			pushing.Wait()
+			close(finished)
+		}()
+		waitFor(t, finished, "the senders")
+
+		for _, sender := range queuedAfterTheSentinel(t, out) {
+			if results[sender] == nil {
+				t.Fatalf("pushBlocking reported message %d sent, and it was queued after close", sender)
+			}
+		}
 	}
 }
 
