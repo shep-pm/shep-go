@@ -4,9 +4,11 @@ package channel
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStartOpensARealDescriptorAndSendsReadiness(t *testing.T) {
@@ -60,5 +62,30 @@ func TestAnUnrecognisedVersionStampWarnsAndProceeds(t *testing.T) {
 	said := warnings.said()
 	if len(said) != 1 || !strings.Contains(said[0], "99") {
 		t.Fatalf("an unknown stamp produced %v", said)
+	}
+}
+
+// The shepherd going away has to reach the app as ErrClosed, not as a
+// parked call. Ready never retries on it: a retry could report readiness
+// twice for one start.
+func TestTheShepherdGoingAwayReachesTheAppAsErrClosed(t *testing.T) {
+	appFD, shepherd := fakeShepherd(t)
+	handle := start(fakeEnv(map[string]string{FDVar: fmt.Sprint(appFD)}), func(string) {})
+
+	if err := shepherd.Close(); err != nil {
+		t.Fatalf("close the shepherd's end: %v", err)
+	}
+	// Waiting for the reader to notice is what makes this a fact.
+	select {
+	case <-handle.out.closed:
+	case <-time.After(serveDeadline):
+		t.Fatal("the reader never noticed the shepherd go away")
+	}
+
+	if handle.Active() {
+		t.Fatal("a handle whose shepherd went away still reads as live")
+	}
+	if err := handle.Ready(); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Ready returned %v, want ErrClosed", err)
 	}
 }

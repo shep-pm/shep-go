@@ -2,6 +2,8 @@ package channel
 
 import (
 	"bufio"
+	"io"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -47,8 +49,32 @@ func runReadLoop(t *testing.T, shepherd *Shepherd, stream string) {
 	}
 }
 
+// takeReply waits for one queued message. It fails at the deadline
+// rather than parking the suite on a queue nothing will fill.
+func takeReply(t *testing.T, shepherd *Shepherd) ChildMessage {
+	t.Helper()
+	select {
+	case reply := <-shepherd.out.messages:
+		return reply
+	case <-time.After(serveDeadline):
+		t.Fatal("no reply reached the outbox")
+		return ChildMessage{}
+	}
+}
+
 func testShepherd(warn func(string)) *Shepherd {
 	return &Shepherd{out: newOutbox(outboxCapacity), handlers: newDispatch(), warn: warn}
+}
+
+// resetServe drops the process-global state Serve answers from.
+//
+// The same shape as releaseChannel, for the same reason. Go runs a
+// package's tests in one process. Production never resets it, since a
+// process has one channel and Serve answers about it once.
+func resetServe() {
+	serveOnce = sync.Once{}
+	served = nil
+	serveCalls.Store(0)
 }
 
 // D3: an app calls every method without asking whether it has a channel.
@@ -120,6 +146,8 @@ func TestTheNoChannelWarningFiresOnlyUnderShep(t *testing.T) {
 // handle and says why. The only test here that calls the singleton,
 // which is process-global and answers once.
 func TestServeHandsBackOneHandleAndWarnsOnce(t *testing.T) {
+	resetServe()
+	t.Cleanup(resetServe)
 	warnings := &collector{}
 	env := fakeEnv(map[string]string{})
 
@@ -175,7 +203,7 @@ func TestAnActionsReplyReachesTheOutboxCarryingItsID(t *testing.T) {
 
 	runReadLoop(t, shepherd, "{\"kind\":\"action\",\"name\":\"gc\",\"params\":\"now please\",\"id\":7}\n")
 
-	reply := <-shepherd.out.messages
+	reply := takeReply(t, shepherd)
 	if reply.Kind != KindActionReply || *reply.Action != "gc" {
 		t.Fatalf("reply is %+v", reply)
 	}
@@ -192,7 +220,7 @@ func TestAnUnknownActionStillGetsAReplyCarryingItsID(t *testing.T) {
 
 	runReadLoop(t, shepherd, "{\"kind\":\"action\",\"name\":\"typo\",\"id\":8}\n")
 
-	reply := <-shepherd.out.messages
+	reply := takeReply(t, shepherd)
 	if *reply.Body != "unknown action: typo" {
 		t.Fatalf("body is %q", *reply.Body)
 	}
@@ -215,12 +243,128 @@ func TestAHandlerThatRegistersAHandlerDoesNotDeadlockTheReader(t *testing.T) {
 		"{\"kind\":\"action\",\"name\":\"reload\",\"id\":1}\n"+
 			"{\"kind\":\"action\",\"name\":\"late\",\"id\":2}\n")
 
-	first := <-shepherd.out.messages
-	second := <-shepherd.out.messages
+	first, second := takeReply(t, shepherd), takeReply(t, shepherd)
 	if *first.Body != "reloaded" {
 		t.Fatalf("the first body is %q", *first.Body)
 	}
 	if *second.Body != "late ok" {
 		t.Fatalf("the second body is %q, so the late handler was not reachable", *second.Body)
+	}
+}
+
+// failWriter refuses every write, which is what a socket does once the
+// far end has gone.
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+// A shepherd that goes away mid-stream has to stop the reader. The
+// alternative is a loop running handlers whose replies nobody can write.
+// ErrClosed is final here, never retried: a retry could send one reply
+// twice.
+func TestAWriterFailureStopsTheReaderMidStream(t *testing.T) {
+	shepherd := testShepherd(func(string) {})
+	ran := make(chan struct{}, 8)
+	shepherd.OnAction("gc", func(Action) string {
+		ran <- struct{}{}
+		return "collected"
+	})
+	go shepherd.out.drain(failWriter{})
+
+	// Waiting for the close is what makes the count below a fact.
+	shepherd.out.pushLossy(NewMetric("rps", 1))
+	select {
+	case <-shepherd.out.closed:
+	case <-time.After(serveDeadline):
+		t.Fatal("a failing writer never closed the outbox")
+	}
+
+	runReadLoop(t, shepherd, strings.Repeat("{\"kind\":\"action\",\"name\":\"gc\",\"id\":1}\n", 8))
+
+	if got := len(ran); got != 1 {
+		t.Fatalf("%d handlers ran after the writer failed, want 1", got)
+	}
+}
+
+// Handlers run on the reader goroutine, so one that blocks holds up the
+// next message. An author budgets against action_timeout for that. The
+// ordering has to be a fact rather than a hope.
+func TestABlockingHandlerHoldsUpTheNextMessage(t *testing.T) {
+	shepherd := testShepherd(func(string) {})
+	entered, release := make(chan struct{}), make(chan struct{})
+	shepherd.OnAction("slow", func(Action) string {
+		close(entered)
+		<-release
+		return "slow done"
+	})
+	shepherd.OnAction("quick", func(Action) string { return "quick done" })
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		shepherd.readLoop(bufio.NewReader(strings.NewReader(
+			"{\"kind\":\"action\",\"name\":\"slow\",\"id\":1}\n" +
+				"{\"kind\":\"action\",\"name\":\"quick\",\"id\":2}\n")))
+	}()
+
+	select {
+	case <-entered:
+	case <-time.After(serveDeadline):
+		t.Fatal("the first handler never ran")
+	}
+	select {
+	case reply := <-shepherd.out.messages:
+		t.Fatalf("the second message was answered while the first blocked: %+v", reply)
+	default:
+	}
+
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(serveDeadline):
+		t.Fatal("readLoop never returned")
+	}
+	first, second := takeReply(t, shepherd), takeReply(t, shepherd)
+	if *first.Body != "slow done" || *second.Body != "quick done" {
+		t.Fatalf("the replies are %q then %q", *first.Body, *second.Body)
+	}
+}
+
+// A handler calling runtime.Goexit ends the reader goroutine. recover
+// cannot catch that, so the action goes unanswered and so does every
+// later one. The deferred close is all that survives, and it is what
+// lets an app notice.
+func TestAHandlerThatEndsItsGoroutineStopsTheReaderAndShutsTheOutbox(t *testing.T) {
+	shepherd := testShepherd(func(string) {})
+	ran := make(chan struct{}, 2)
+	shepherd.OnAction("leave", func(Action) string {
+		ran <- struct{}{}
+		runtime.Goexit()
+		return "never reached"
+	})
+	shepherd.OnAction("after", func(Action) string {
+		ran <- struct{}{}
+		return "after ok"
+	})
+
+	go shepherd.readLoop(bufio.NewReader(strings.NewReader(
+		"{\"kind\":\"action\",\"name\":\"leave\",\"id\":1}\n" +
+			"{\"kind\":\"action\",\"name\":\"after\",\"id\":2}\n")))
+
+	select {
+	case <-shepherd.out.closed:
+	case <-time.After(serveDeadline):
+		t.Fatal("the reader ended without closing the outbox")
+	}
+	if shepherd.Active() {
+		t.Fatal("a handle whose reader is gone still reads as live")
+	}
+	if got := len(ran); got != 1 {
+		t.Fatalf("%d handlers ran, want only the one that left", got)
+	}
+	select {
+	case reply := <-shepherd.out.messages:
+		t.Fatalf("a handler that never returned still produced %+v", reply)
+	default:
 	}
 }
