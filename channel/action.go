@@ -8,7 +8,7 @@ type Action struct {
 	Name string
 	// Params is the argument text, nil when the trigger carried none.
 	//
-	// A pointer because the wire omits the key entirely: an absent
+	// A pointer because the wire omits the key entirely. An absent
 	// params and an empty one are different messages.
 	Params *string
 }
