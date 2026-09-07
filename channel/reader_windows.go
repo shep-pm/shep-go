@@ -28,7 +28,9 @@ var (
 // pipeReader reads the channel's pipe without parking inside ReadFile.
 //
 // The shepherd hands this process one pipe instance and the writer holds
-// the same object. A parked read would hold it against every write.
+// the same object. A parked read would hold it against every write. The
+// halves are still not independent. A peek can wait behind an
+// in-progress WriteFile.
 type pipeReader struct {
 	pipe *os.File
 }
