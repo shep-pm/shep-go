@@ -3,3 +3,6 @@
 *.exe
 *.test
 *.out
+# go build ./... from examples/answers/ names its binary after the
+# directory, with no extension on unix.
+/examples/answers/answers
