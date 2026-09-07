@@ -15,7 +15,7 @@ const outboxCapacity = 1024
 // outbox is the queue between the app's goroutines and the one goroutine
 // that writes.
 //
-// A dropped metric costs nothing: the shepherd logs metrics at debug
+// A dropped metric costs nothing. The shepherd logs metrics at debug
 // level and reads them nowhere else. A dropped readiness hangs
 // wait_ready, and a dropped reply costs an operator a whole
 // action_timeout.
