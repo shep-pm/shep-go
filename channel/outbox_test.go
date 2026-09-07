@@ -314,7 +314,7 @@ func (c *lineCounter) Write(p []byte) (int, error) {
 // countable: written by drain, or counted in droppedCount. Never both,
 // never neither.
 func TestALossyPushNeverStrandsAMetricAcrossCloseAndDrain(t *testing.T) {
-	const trials = 200
+	const trials = 2000
 	const senders = 64
 
 	for range trials {
