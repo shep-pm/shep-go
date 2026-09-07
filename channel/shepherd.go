@@ -136,8 +136,8 @@ func (s *Shepherd) answer(message ShepherdMessage) bool {
 			s.warn(unhandledShutdownAdvice)
 			return true
 		}
-		if panicked, failed := runShutdown(handler); failed {
-			s.warn("shutdown handler panicked: " + panicked)
+		if problem, failed := runShutdown(handler); failed {
+			s.warn(problem)
 		}
 		return true
 	case KindAction:

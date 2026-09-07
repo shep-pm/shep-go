@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -67,9 +68,31 @@ func TestAShutdownHandlerRunsAndAPanicIsReported(t *testing.T) {
 
 	registry.registerShutdown(func() { panic("no such state") })
 	handler, _ = registry.resolveShutdown()
-	message, failed := runShutdown(handler)
-	if !failed || message != "no such state" {
-		t.Fatalf("a panicking handler reported %q, failed=%v", message, failed)
+	problem, failed := runShutdown(handler)
+	if !failed || problem != "shutdown handler panicked: no such state" {
+		t.Fatalf("a panicking handler reported %q, failed=%v", problem, failed)
+	}
+}
+
+// recover cannot catch a runtime.Goexit, so neither handler runs on the
+// caller's goroutine. The operator still gets an answer.
+func TestHandlersThatEndTheirGoroutineStillProduceAnAnswer(t *testing.T) {
+	registry := newDispatch()
+	registry.registerAction("leave", func(Action) string {
+		runtime.Goexit()
+		return "never reached"
+	})
+
+	handler, registered := registry.resolveAction("leave")
+	if body := replyBody(handler, registered, Action{Name: "leave"}); body != "action handler ended its goroutine" {
+		t.Fatalf("body is %q", body)
+	}
+
+	registry.registerShutdown(func() { runtime.Goexit() })
+	shutdown, _ := registry.resolveShutdown()
+	problem, failed := runShutdown(shutdown)
+	if !failed || problem != "shutdown handler ended its goroutine" {
+		t.Fatalf("a shutdown handler that left reported %q, failed=%v", problem, failed)
 	}
 }
 

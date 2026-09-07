@@ -50,32 +50,46 @@ func (d *dispatch) resolveShutdown() (func(), bool) {
 
 // replyBody runs handler and returns what to send back.
 //
-// An unregistered name and a panicking handler both produce a body.
-// recover catches a panic but not runtime.Goexit. A handler that
-// calls Goexit ends its goroutine silently, and no reply is sent.
-func replyBody(handler func(Action) string, registered bool, action Action) (body string) {
+// An unregistered name, a panic and a handler calling runtime.Goexit
+// all produce a body. recover cannot catch a Goexit, so it unwinds a
+// goroutine this call waits for.
+func replyBody(handler func(Action) string, registered bool, action Action) string {
 	if !registered {
 		return "unknown action: " + action.Name
 	}
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			body = fmt.Sprintf("action handler failed: %v", recovered)
-		}
+	body := "action handler ended its goroutine"
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				body = fmt.Sprintf("action handler failed: %v", recovered)
+			}
+		}()
+		body = handler(action)
 	}()
-	return handler(action)
+	<-done
+	return body
 }
 
-// runShutdown runs handler and reports whether it panicked.
+// runShutdown runs handler and reports what went wrong, if anything.
 //
-// An unwind reaching the reader goroutine would take the process down.
-// The app only wanted to stop gracefully.
-func runShutdown(handler func()) (message string, failed bool) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			message = fmt.Sprint(recovered)
-			failed = true
-		}
+// The unwind from a panic or a runtime.Goexit would otherwise end the
+// read loop. The app only wanted to stop gracefully. The handler runs
+// on a goroutine this call waits for.
+func runShutdown(handler func()) (problem string, failed bool) {
+	problem, failed = "shutdown handler ended its goroutine", true
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				problem, failed = fmt.Sprintf("shutdown handler panicked: %v", recovered), true
+			}
+		}()
+		handler()
+		problem, failed = "", false
 	}()
-	handler()
-	return "", false
+	<-done
+	return problem, failed
 }

@@ -330,41 +330,51 @@ func TestABlockingHandlerHoldsUpTheNextMessage(t *testing.T) {
 	}
 }
 
-// A handler calling runtime.Goexit ends the reader goroutine. recover
-// cannot catch that, so the action goes unanswered and so does every
-// later one. The deferred close is all that survives, and it is what
-// lets an app notice.
-func TestAHandlerThatEndsItsGoroutineStopsTheReaderAndShutsTheOutbox(t *testing.T) {
+// A handler calling runtime.Goexit ends the goroutine its reply runs
+// on, and nothing else. The action is still answered and the reader
+// goes on to the next message.
+func TestAHandlerThatEndsItsGoroutineStillAnswersAndTheReaderGoesOn(t *testing.T) {
 	shepherd := testShepherd(func(string) {})
-	ran := make(chan struct{}, 2)
 	shepherd.OnAction("leave", func(Action) string {
-		ran <- struct{}{}
 		runtime.Goexit()
 		return "never reached"
 	})
-	shepherd.OnAction("after", func(Action) string {
-		ran <- struct{}{}
-		return "after ok"
-	})
+	shepherd.OnAction("after", func(Action) string { return "after ok" })
 
-	go shepherd.readLoop(bufio.NewReader(strings.NewReader(
-		"{\"kind\":\"action\",\"name\":\"leave\",\"id\":1}\n" +
-			"{\"kind\":\"action\",\"name\":\"after\",\"id\":2}\n")))
+	runReadLoop(t, shepherd,
+		"{\"kind\":\"action\",\"name\":\"leave\",\"id\":1}\n"+
+			"{\"kind\":\"action\",\"name\":\"after\",\"id\":2}\n")
 
-	select {
-	case <-shepherd.out.closed:
-	case <-time.After(serveDeadline):
-		t.Fatal("the reader ended without closing the outbox")
+	first, second := takeReply(t, shepherd), takeReply(t, shepherd)
+	if *first.Body != "action handler ended its goroutine" {
+		t.Fatalf("the first body is %q", *first.Body)
 	}
-	if shepherd.Active() {
-		t.Fatal("a handle whose reader is gone still reads as live")
+	if first.ID == nil || *first.ID != 1 {
+		t.Fatalf("the id was not echoed: %+v", first.ID)
 	}
-	if got := len(ran); got != 1 {
-		t.Fatalf("%d handlers ran, want only the one that left", got)
+	if *second.Body != "after ok" {
+		t.Fatalf("the second body is %q, so the reader did not survive", *second.Body)
 	}
-	select {
-	case reply := <-shepherd.out.messages:
-		t.Fatalf("a handler that never returned still produced %+v", reply)
-	default:
+}
+
+// A shutdown carries no reply, so the warning is the only sign that a
+// handler left. Losing the reader here is worse: the app was already
+// being asked to stop.
+func TestAShutdownHandlerThatEndsItsGoroutineWarnsAndTheReaderGoesOn(t *testing.T) {
+	warnings := &collector{}
+	shepherd := testShepherd(warnings.warn)
+	shepherd.OnShutdown(func() { runtime.Goexit() })
+	shepherd.OnAction("after", func(Action) string { return "after ok" })
+
+	runReadLoop(t, shepherd,
+		"{\"kind\":\"shutdown\"}\n"+
+			"{\"kind\":\"action\",\"name\":\"after\",\"id\":1}\n")
+
+	if reply := takeReply(t, shepherd); *reply.Body != "after ok" {
+		t.Fatalf("the body is %q, so the reader did not survive", *reply.Body)
+	}
+	said := warnings.said()
+	if len(said) != 1 || !strings.Contains(said[0], "shutdown handler ended its goroutine") {
+		t.Fatalf("a shutdown handler that left produced %v", said)
 	}
 }
