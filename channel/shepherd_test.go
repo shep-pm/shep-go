@@ -119,6 +119,27 @@ func TestTheNoChannelAdviceNamesEveryFieldThatOpensOne(t *testing.T) {
 	}
 }
 
+// D5: the shepherd asked this app to stop and the library does not end
+// it. The warning is the whole of what happens, so the read loop has to
+// be what emits it.
+func TestAShutdownWithNoHandlerWarnsOnceAndTheReaderGoesOn(t *testing.T) {
+	warnings := &collector{}
+	shepherd := testShepherd(warnings.warn)
+	shepherd.OnAction("after", func(Action) string { return "after ok" })
+
+	runReadLoop(t, shepherd,
+		"{\"kind\":\"shutdown\"}\n"+
+			"{\"kind\":\"action\",\"name\":\"after\",\"id\":1}\n")
+
+	if reply := takeReply(t, shepherd); *reply.Body != "after ok" {
+		t.Fatalf("the body is %q, so the reader did not survive", *reply.Body)
+	}
+	said := warnings.said()
+	if len(said) != 1 || said[0] != unhandledShutdownAdvice {
+		t.Fatalf("an unhandled shutdown produced %v", said)
+	}
+}
+
 // D5 makes this warning the only thing between a missing handler and a
 // kill_timeout kill.
 func TestTheUnhandledShutdownWarningNamesTheMethodToCall(t *testing.T) {
