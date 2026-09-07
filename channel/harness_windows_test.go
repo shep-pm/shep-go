@@ -97,3 +97,8 @@ func startChild(t *testing.T) *child {
 
 	return &child{reader: bufio.NewReader(server), writer: server, cmd: cmd}
 }
+
+// maybeRunAsEOFChild always reports false. The fd-leak this guards
+// against is a unix exec detail; harness_unix_test.go carries the mode
+// it selects.
+func maybeRunAsEOFChild(string) bool { return false }

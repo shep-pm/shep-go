@@ -21,8 +21,12 @@ const childGuard = "SHEP_GO_CHANNEL_CHILD"
 const childDeadline = 20 * time.Second
 
 func TestMain(m *testing.M) {
-	if os.Getenv(childGuard) == "1" {
+	guard := os.Getenv(childGuard)
+	if guard == "1" {
 		runAsChild()
+		return
+	}
+	if maybeRunAsEOFChild(guard) {
 		return
 	}
 	os.Exit(m.Run())
