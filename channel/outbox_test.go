@@ -30,8 +30,8 @@ func waitFor(t *testing.T, signal <-chan struct{}, what string) {
 
 // runBounded runs work on its own goroutine and fails at the deadline.
 //
-// Every call that could park goes through it, so a regression is a red
-// test rather than a hung binary an external timeout has to kill.
+// Every call that could park goes through it. A regression is then a
+// red test, not a hung binary an external timeout kills.
 func runBounded(t *testing.T, what string, work func()) {
 	t.Helper()
 	done := make(chan struct{})
@@ -50,14 +50,14 @@ func pushBounded(t *testing.T, out *outbox, message ChildMessage, what string) e
 	return err
 }
 
-// sentinelName marks the message that divides one queue into what was
-// pushed before a close and what was pushed after it.
+// sentinelName marks the message that divides one queue. Pushes before
+// a close land ahead of it, and pushes after it land behind.
 const sentinelName = "sentinel"
 
 // queuedAfterTheSentinel reports which senders landed behind the mark.
 //
-// Every sender has finished by the time this runs, so draining the
-// queue to empty reads all of it.
+// Every sender has finished by the time this runs. Draining the queue
+// to empty then reads all of it.
 func queuedAfterTheSentinel(t *testing.T, out *outbox) []int {
 	t.Helper()
 	var late []int

@@ -25,8 +25,8 @@ const connDeadline = 5 * time.Second
 // process and never a second.
 func releaseChannel() { channelTaken.Store(false) }
 
-// fakeShepherd hands back a real socketpair: one end's descriptor number
-// for the library, the other end wrapped for the test to drive.
+// fakeShepherd hands back a real socketpair. The library gets one end's
+// descriptor number, and the test drives the other.
 func fakeShepherd(t *testing.T) (appFD int, shepherd net.Conn) {
 	t.Helper()
 	pair, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)

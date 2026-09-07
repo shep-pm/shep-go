@@ -144,8 +144,8 @@ func TestTheNoChannelWarningFiresOnlyUnderShep(t *testing.T) {
 }
 
 // A descriptor that will not open is a broken environment, not an absent
-// channel. It is loud, it still hands back a handle, and the stamp goes
-// with it: this is the only inert handle that carries one.
+// channel. It is loud and still hands back a handle. This is the only
+// inert handle that carries a version stamp.
 func TestADescriptorThatWillNotOpenWarnsAndKeepsTheStamp(t *testing.T) {
 	warnings := &collector{}
 	handle := start(fakeEnv(map[string]string{
@@ -301,7 +301,7 @@ type errReader struct{}
 func (errReader) Read([]byte) (int, error) { return 0, errTransport }
 
 // An operator greps for one prefix. A reader that stopped answering has
-// to be findable that way, and end of stream has to stay quiet.
+// to be findable that way. End of stream has to stay quiet.
 func TestAReadFailureWarnsAndACleanEndOfStreamDoesNot(t *testing.T) {
 	broken := &collector{}
 	shepherd := testShepherd(broken.warn)
