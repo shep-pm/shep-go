@@ -1,7 +1,7 @@
 // Command answers is a supervised app that answers on the shepherd
 // channel.
 //
-// Run it under shep with `channel = true` and `shep trigger answers gc`
+// Run it under shep with `channel = true`. Then `shep trigger answers gc`
 // reaches the handler below.
 package main
 

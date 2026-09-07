@@ -32,7 +32,7 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -eu
-          # --no-merges: release-please skips merges, so a `!` on a merge
+          # --no-merges: release-please skips merges. A `!` on a merge
           # subject or PR title never reaches it.
           #
           # No exemptions here: an unsquashed fixup!/squash!/amend! commit

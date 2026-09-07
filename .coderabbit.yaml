@@ -20,7 +20,7 @@ reviews:
 
   auto_review:
     # release-please opens this one. Merging it is the release. Every
-    # commit in it was already reviewed on its own pull request, so the
+    # commit in it was already reviewed on its own pull request. So the
     # diff itself needs no separate review.
     #
     # Matched on a label, not a username or a title keyword. A bot can

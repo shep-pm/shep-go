@@ -120,7 +120,7 @@ func TestTheNoChannelAdviceNamesEveryFieldThatOpensOne(t *testing.T) {
 }
 
 // D5: the shepherd asked this app to stop and the library does not end
-// it. The warning is the whole of what happens, so the read loop has to
+// it. The warning is the whole of what happens. So the read loop has to
 // be what emits it.
 func TestAShutdownWithNoHandlerWarnsOnceAndTheReaderGoesOn(t *testing.T) {
 	warnings := &collector{}
@@ -481,7 +481,7 @@ func TestAShutdownHandlerThatEndsItsGoroutineWarnsAndTheReaderGoesOn(t *testing.
 	}
 }
 
-// D4: a metric never blocks and never fails, so a value JSON cannot
+// D4: a metric never blocks and never fails. A value JSON cannot
 // carry costs one sample and nothing else. Readiness and replies are
 // the two things a channel exists for.
 func TestANonFiniteMetricIsDroppedAndTheChannelStaysUp(t *testing.T) {
