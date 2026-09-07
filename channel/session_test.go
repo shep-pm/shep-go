@@ -117,3 +117,16 @@ func TestAReplyBodyKeepsItsAngleBracketsVerbatim(t *testing.T) {
 		t.Fatalf("the body was escaped: %s", out.String())
 	}
 }
+
+// A zero value must survive encoding. Go's omitempty drops a plain
+// zero, so NewMetric wraps every value. This confirms the wrap
+// actually reaches the wire.
+func TestAZeroMetricValueSurvivesEncoding(t *testing.T) {
+	var out bytes.Buffer
+	if err := writeMessage(&out, NewMetric("errors", 0)); err != nil {
+		t.Fatalf("write metric: %v", err)
+	}
+	if !strings.Contains(out.String(), `"value":0`) {
+		t.Fatalf("a zero value did not survive encoding: %s", out.String())
+	}
+}
