@@ -23,8 +23,8 @@ func TestARegisteredActionRunsItsHandler(t *testing.T) {
 	}
 }
 
-// The contract calls this out: without a reply the operator waits out the
-// whole action_timeout for a typo.
+// The contract calls this out. Without a reply the operator waits
+// out the whole action_timeout for a typo.
 func TestAnUnregisteredActionStillGetsAReply(t *testing.T) {
 	registry := newDispatch()
 	handler, registered := registry.resolveAction("reload-config")
