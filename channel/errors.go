@@ -8,6 +8,13 @@ import "errors"
 // Close has run.
 var ErrClosed = errors.New("shep channel closed")
 
+// ErrInvalidLabel means a lamb label broke the channel's grammar and
+// nothing was sent.
+//
+// From LabelLamb: at most MaxLabelChars characters, and no control
+// character. The shepherd would drop the same label as a malformed frame.
+var ErrInvalidLabel = errors.New("invalid lamb label")
+
 // ErrMalformed is one line the reader could not use.
 //
 // Recoverable. The next read resumes at the next line. That is what the

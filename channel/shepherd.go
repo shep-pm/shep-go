@@ -7,8 +7,11 @@ import (
 	"io"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode"
+	"unicode/utf8"
 )
 
 // noChannelAdvice is what to tell an author running under shep with no
@@ -198,6 +201,49 @@ func (s *Shepherd) Metric(name string, value float64) {
 		return
 	}
 	s.out.pushLossy(NewMetric(name, value))
+}
+
+// MaxLabelChars is the most characters a lamb label may hold, counted as
+// Unicode code points.
+const MaxLabelChars = 64
+
+// checkLabel holds a label to the grammar the shepherd enforces.
+//
+// Checked here so a bad label comes back as an error at the call site.
+// Sent as it was, it would cost a malformed-frame line in the shepherd's
+// log and nobody would see why the label never appeared.
+func checkLabel(label string) error {
+	if chars := utf8.RuneCountInString(label); chars > MaxLabelChars {
+		return fmt.Errorf("%w: at most %d characters, and this one has %d",
+			ErrInvalidLabel, MaxLabelChars, chars)
+	}
+	if strings.ContainsFunc(label, unicode.IsControl) {
+		return fmt.Errorf("%w: a control character, a newline included, is not allowed", ErrInvalidLabel)
+	}
+	return nil
+}
+
+// LabelLamb names one of this app's own child processes, so
+// `shep describe` shows it beside the executable name. An empty label
+// clears the one pid had.
+//
+// Blocks only until the message is queued, as Ready does. A label is
+// state the operator reads, so it is not dropped under backpressure the
+// way a metric is. pid is the one the app's own spawn call reported. The
+// shepherd shows the label only while that process is in this app's
+// tree.
+//
+// Returns ErrInvalidLabel for a label over MaxLabelChars characters or
+// holding a control character, and sends nothing. Returns ErrClosed when
+// the shepherd has gone away. With no channel a valid label returns nil.
+func (s *Shepherd) LabelLamb(pid uint32, label string) error {
+	if err := checkLabel(label); err != nil {
+		return err
+	}
+	if s.out == nil {
+		return nil
+	}
+	return s.out.pushBlocking(NewLambLabel(pid, label))
 }
 
 // OnAction registers a handler for one action name, replacing any prior

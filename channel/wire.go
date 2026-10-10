@@ -17,6 +17,8 @@ const (
 	KindMetric = "metric"
 	// KindActionReply is the child's answer to one action.
 	KindActionReply = "action-reply"
+	// KindLambLabel names one of the app's own child processes.
+	KindLambLabel = "lamb-label"
 	// KindShutdown is the shepherd asking the app to stop.
 	KindShutdown = "shutdown"
 	// KindAction is the shepherd dispatching one custom action.
@@ -26,7 +28,8 @@ const (
 // ChildMessage is one line the app writes to the shepherd.
 //
 // Kind selects which other fields carry meaning. Each of those is a
-// pointer. Dropping a zero would lose a metric of 0.
+// pointer. Dropping a zero would lose a metric of 0 or an empty label,
+// which clears one.
 type ChildMessage struct {
 	Kind   string   `json:"kind"`
 	Name   *string  `json:"name,omitempty"`
@@ -34,6 +37,8 @@ type ChildMessage struct {
 	Action *string  `json:"action,omitempty"`
 	Body   *string  `json:"body,omitempty"`
 	ID     *uint64  `json:"id,omitempty"`
+	PID    *uint32  `json:"pid,omitempty"`
+	Label  *string  `json:"label,omitempty"`
 }
 
 // ShepherdMessage is one line the shepherd writes to the app.
