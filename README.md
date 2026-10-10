@@ -26,7 +26,9 @@ empty one clears it:
 
 ```go
 cmd := exec.Command("worker")
-_ = cmd.Start()
+if err := cmd.Start(); err != nil {
+	return err
+}
 if err := shepherd.LabelLamb(uint32(cmd.Process.Pid), "worker 1"); err != nil {
 	log.Print(err)
 }

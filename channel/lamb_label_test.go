@@ -44,6 +44,7 @@ func TestALabelThatBreaksTheGrammarIsRefusedAndNothingIsSent(t *testing.T) {
 		"a delete":              "worker\x7f",
 		"a C1 control":          "worker\u009b1",
 		"a NUL":                 "\x00",
+		"invalid UTF-8":         "bad\xfflabel",
 	}
 	for name, label := range cases {
 		shepherd := testShepherd(func(string) {})

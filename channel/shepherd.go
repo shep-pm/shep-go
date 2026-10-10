@@ -213,6 +213,12 @@ const MaxLabelChars = 64
 // Sent as it was, it would cost a malformed-frame line in the shepherd's
 // log and nobody would see why the label never appeared.
 func checkLabel(label string) error {
+	// Encoding would swap a bad byte for U+FFFD, and the operator would
+	// read a name the app never sent. A Rust String is always valid
+	// UTF-8, so the shepherd has no such label to match.
+	if !utf8.ValidString(label) {
+		return fmt.Errorf("%w: not valid UTF-8", ErrInvalidLabel)
+	}
 	if chars := utf8.RuneCountInString(label); chars > MaxLabelChars {
 		return fmt.Errorf("%w: at most %d characters, and this one has %d",
 			ErrInvalidLabel, MaxLabelChars, chars)
