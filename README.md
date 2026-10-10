@@ -20,6 +20,20 @@ if err := shepherd.Ready(); err != nil {
 shepherd.Metric("rps", 4200)
 ```
 
+Name a child process of your own, and `shep describe` shows the name beside
+it. A label holds at most 64 characters and no control character, and an
+empty one clears it:
+
+```go
+cmd := exec.Command("worker")
+if err := cmd.Start(); err != nil {
+	return err
+}
+if err := shepherd.LabelLamb(uint32(cmd.Process.Pid), "worker 1"); err != nil {
+	log.Print(err)
+}
+```
+
 ```
 go get github.com/shep-pm/shep-go/channel
 ```

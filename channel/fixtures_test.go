@@ -12,11 +12,13 @@ import (
 
 // childCases maps a fixture name to the value its bytes mean.
 var childCases = map[string]ChildMessage{
-	"child-ready":           {Kind: KindReady},
-	"child-metric":          {Kind: KindMetric, Name: ptr("rps"), Value: ptr(42.0)},
-	"child-metric-zero":     {Kind: KindMetric, Name: ptr("idle"), Value: ptr(0.0)},
-	"child-action-reply":    {Kind: KindActionReply, Action: ptr("gc"), Body: ptr("ok")},
-	"child-action-reply-id": {Kind: KindActionReply, Action: ptr("gc"), Body: ptr("ok"), ID: ptr(uint64(7))},
+	"child-ready":            {Kind: KindReady},
+	"child-metric":           {Kind: KindMetric, Name: ptr("rps"), Value: ptr(42.0)},
+	"child-metric-zero":      {Kind: KindMetric, Name: ptr("idle"), Value: ptr(0.0)},
+	"child-action-reply":     {Kind: KindActionReply, Action: ptr("gc"), Body: ptr("ok")},
+	"child-action-reply-id":  {Kind: KindActionReply, Action: ptr("gc"), Body: ptr("ok"), ID: ptr(uint64(7))},
+	"child-lamb-label":       {Kind: KindLambLabel, PID: ptr(uint32(4312)), Label: ptr("worker 1")},
+	"child-lamb-label-clear": {Kind: KindLambLabel, PID: ptr(uint32(4312)), Label: ptr("")},
 }
 
 // shepherdCases maps a fixture name to the value its bytes mean.
@@ -140,11 +142,13 @@ func TestAZeroMetricKeepsItsValueOnTheWire(t *testing.T) {
 // only this file writes.
 func TestTheConstructorsProduceTheFixtureValues(t *testing.T) {
 	cases := map[string]ChildMessage{
-		"child-ready":           NewReady(),
-		"child-metric":          NewMetric("rps", 42),
-		"child-metric-zero":     NewMetric("idle", 0),
-		"child-action-reply":    NewReply("gc", "ok", nil),
-		"child-action-reply-id": NewReply("gc", "ok", ptr(uint64(7))),
+		"child-ready":            NewReady(),
+		"child-metric":           NewMetric("rps", 42),
+		"child-metric-zero":      NewMetric("idle", 0),
+		"child-action-reply":     NewReply("gc", "ok", nil),
+		"child-action-reply-id":  NewReply("gc", "ok", ptr(uint64(7))),
+		"child-lamb-label":       NewLambLabel(4312, "worker 1"),
+		"child-lamb-label-clear": NewLambLabel(4312, ""),
 	}
 	for name, built := range cases {
 		if !reflect.DeepEqual(built, childCases[name]) {

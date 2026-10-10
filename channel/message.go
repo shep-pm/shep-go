@@ -16,6 +16,15 @@ func NewMetric(name string, value float64) ChildMessage {
 	return ChildMessage{Kind: KindMetric, Name: ptr(name), Value: ptr(value)}
 }
 
+// NewLambLabel builds the message that names one of the app's own child
+// processes. An empty label clears the one pid had.
+//
+// Nothing is checked here. Shepherd.LabelLamb checks the grammar before
+// it sends.
+func NewLambLabel(pid uint32, label string) ChildMessage {
+	return ChildMessage{Kind: KindLambLabel, PID: ptr(pid), Label: ptr(label)}
+}
+
 // NewReply builds the answer to one action.
 //
 // id is echoed verbatim, including its absence. The shepherd matches a
