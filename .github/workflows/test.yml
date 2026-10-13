@@ -18,8 +18,14 @@ jobs:
       matrix:
         # The floor and the current release. The floor is what go.mod
         # claims, so it is tested rather than assumed.
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # macOS runs after merge, not on pull requests: the org gets five
+        # macOS runners at once and pull requests queued behind them.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest","windows-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
         go: ["1.24", "stable"]
+        # Linux and Windows check the oldest Go, so macOS runs stable only.
+        exclude:
+          - os: macos-latest
+            go: "1.24"
     defaults:
       run:
         working-directory: channel
