@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.0](https://github.com/shep-pm/shep-go/compare/channel/v1.0.0...channel/v1.1.0) (2026-10-13)
+
+
+### Features
+
+* **channel:** label a lamb over the shepherd channel ([2b5d34b](https://github.com/shep-pm/shep-go/commit/2b5d34b1c8afc4b0802eb4aa97210cd057fd7af7))
+* **channel:** label a lamb over the shepherd channel ([d251315](https://github.com/shep-pm/shep-go/commit/d25131574a7efe427ddc48bc5a2ff6d0463d4d84))
+
+
+### Bug Fixes
+
+* **channel:** refuse a lamb label that is not valid UTF-8 ([a9d99e5](https://github.com/shep-pm/shep-go/commit/a9d99e5ede2b9416d50a71e17f3309cf37790c41))
+
 ## 1.0.0 (2026-09-07)
 
 
